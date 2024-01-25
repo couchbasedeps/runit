@@ -2,6 +2,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <signal.h>
+#include <stdio.h>
 #include "direntry.h"
 #include "strerr.h"
 #include "error.h"
@@ -16,6 +17,7 @@
 #include "sig.h"
 #include "ndelay.h"
 
+#define INFO "- runsvdir: "
 #define USAGE " [-P] dir"
 #define VERSION "$Id$"
 
@@ -50,8 +52,9 @@ void warn(char *m1, char *m2) {
 }
 void warn3x(char *m1, char *m2, char *m3) {
   strerr_warn6("runsvdir ", svdir, ": warning: ", m1, m2, m3, 0);
-} 
-void s_term() { exitsoon =1; }
+}
+
+void s_term() { exitsoon =2; }
 void s_hangup() { exitsoon =2; }
 
 void runsv(int no, char *name) {
@@ -191,7 +194,7 @@ int main(int argc, char **argv) {
       warn3x("log service disabled.", 0, 0);
     }
   }
-  if ((curdir =open_read(".")) == -1) 
+  if ((curdir =open_read(".")) == -1)
     fatal("unable to open current directory", 0);
   coe(curdir);
 
@@ -223,7 +226,7 @@ int main(int argc, char **argv) {
       /* wait at least a second */
       taia_uint(&deadline, 1);
       taia_add(&stampcheck, &now, &deadline);
-      
+
       if (stat(svdir, &s) != -1) {
         if (check || \
             s.st_mtime != mtime || s.st_ino != ino || s.st_dev != dev) {
@@ -278,7 +281,15 @@ int main(int argc, char **argv) {
       _exit(0);
     case 2:
       for (i =0; i < svnum; i++) if (sv[i].pid) kill(sv[i].pid, SIGTERM);
-      _exit(111);
+      for (i =0; i < svnum; i++) {
+        char buf[128];
+        sprintf(buf, "%d", sv[i].pid);
+        strerr_warn3(INFO, "waiting for pid ", buf, 0);
+        wait_pid(&wstat, sv[i].pid);
+        strerr_warn3(INFO, "finished waiting for pid ", buf, 0);
+      }
+      strerr_warn2(INFO, "exiting cleanly", 0);
+      _exit(0);
     }
   }
   /* not reached */
